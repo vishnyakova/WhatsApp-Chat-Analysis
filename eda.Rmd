@@ -39,7 +39,7 @@ source("parse_chat.R")
 
 
 ```{r}
-ProcessChatData("Discussion WhatsApp avec JB.txt", "emojis.csv", "chat_data_parsed.Rdata")
+ProcessChatData("WhatsApp Chat with AS.txt", "emojis.csv", "chat_data_parsed.Rdata")
 ```
 
 
@@ -59,9 +59,12 @@ str(chat_data_parsed)
 ```{r}
 authors <- chat_data_parsed %>% .$author %>% unique
 
+print(authors)
+
 chat_data_parsed <- chat_data_parsed %>%
-  mutate(author = case_when(author != authors[1] ~ 'author_1', TRUE ~ 'author_2'))
+  mutate(author = case_when(author == authors[1] ~ 'author_1', TRUE ~ 'author_2'))
 ```
+
 
 
 
