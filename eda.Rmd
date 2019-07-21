@@ -1,0 +1,450 @@
+---
+title: "Chat Analysis EDA"
+author: "Anastasia Vishnyakova"
+date: "April 11, 2019"
+output:
+  html_document:
+    code_folding: hide
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(scipen=999)
+
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(ggplot2)
+library(scales)
+library(lazyeval)
+library(purrr)
+
+
+theme_set(theme_classic())
+default_options <- options()
+
+library(tidytext)
+library(stringr)
+
+# install.packages("plotly")
+library(plotly)
+```
+
+
+```{r}
+#load the data
+load("data_e.Rdata")
+```
+
+
+In this document we do some EDA on the chat history between Anastasia and Andrey. 
+
+
+First, we will count total lines of messages by author. Anastasia sent more messages compared to Andrey. 
+
+```{r}
+data_e %>% 
+  group_by(author) %>%
+  count() %>%
+  spread(author, n, fill = 0) %>%
+  mutate(total = Anastasia + Andrey) %>%
+    mutate(ratio = Andrey/Anastasia)
+```
+
+
+Next, we will look at the total words sent by the author. Here we want to clean up the messages to remove:
+
+* <Media omited>
+* Strings starting with https and http
+* Emojis. 
+* Sequence of characters that is not letters
+
+
+
+```{r}
+data_e %>% 
+  select(author, text) %>%
+  mutate(text = str_remove_all(text, "<Media omitted>")) %>%
+  mutate(text = str_remove_all(text, "(^|\\s)http[^ ]*")) %>%
+  mutate(text = str_remove_all(text, "[^[:ascii:]]")) %>%
+  mutate(text = str_remove_all(text, "[^a-zA-Z ]")) %>%
+  mutate(text = trimws(text)) %>%
+  filter(text != "") %>%
+  mutate(words = lengths(strsplit(text, " "))) %>% 
+  group_by(author) %>%
+  summarise(words = sum(words))%>%
+  spread(author, words, fill = 0) %>%
+  mutate(total = Anastasia + Andrey) %>%
+    mutate(ratio = Andrey/Anastasia)
+```
+
+
+
+Do one of the authors more likely to use big words? Checking the averge number of characters per word. Looks like there is no difference in the 
+
+
+```{r}
+data_e %>% 
+  select(author, text) %>%
+  mutate(text = str_remove_all(text, "<Media omitted>")) %>%
+  mutate(text = str_remove_all(text, "(^|\\s)http[^ ]*")) %>%
+  mutate(text = str_remove_all(text, "[^[:ascii:]]")) %>%
+  mutate(text = str_remove_all(text, "[^a-zA-Z ]")) %>%
+  mutate(text = trimws(text)) %>%
+  filter(text != "") %>%
+  mutate(words = strsplit(text, " ")) %>% 
+  unnest(words) %>%
+  mutate(length = nchar(words)) %>%
+  filter(length != 0) %>% 
+  group_by(author) %>%
+  summarise(n_charactgers_per_word = mean(length, na.rm = TRUE),
+            median = quantile(length, .5),
+            percentile_75 = quantile(length, .75),
+            percentile_95 = quantile(length, .95)
+            )
+
+```
+
+
+
+Total characters sent by author, the ratio of characters is similar to message ratio. 
+
+```{r}
+data_e %>% 
+  select(author, event_dt, text) %>%
+  unique() %>%
+  mutate(characters = nchar(text))%>%
+  group_by(author) %>%
+  summarise(characters = sum(characters))%>%
+  spread(author, characters, fill = 0) %>%
+  mutate(total = Anastasia + Andrey) %>%
+    mutate(ratio = Andrey/Anastasia)
+```
+
+Next, we check vocabulary size. 
+
+```{r}
+data_e %>% 
+  select(author, text) %>%
+  mutate(text = str_remove_all(text, "<Media omitted>")) %>%
+  mutate(text = str_remove_all(text, "(^|\\s)http[^ ]*")) %>%
+  mutate(text = str_remove_all(text, "[^[:ascii:]]")) %>%
+  mutate(text = str_remove_all(text, "[^a-zA-Z ]")) %>%
+  mutate(text = trimws(text)) %>%
+  filter(text != "") %>%
+  mutate(words = strsplit(text, " ")) %>% 
+  unnest(words) %>%
+  select(words, author) %>%
+  distinct() %>%
+  group_by(author) %>%
+  count() %>%
+  spread(author, n) %>%
+  mutate(diff = Anastasia - Andrey,
+         pct_diff = round(diff/Andrey*100,2))
+  
+```
+
+
+```{r}
+data_e %>% 
+  ungroup() %>%
+  select(author, event_dt, text) %>%
+  unique() %>%
+  mutate(event_dt = as.Date(event_dt)) %>%
+  group_by(event_dt, author) %>%
+  count() %>%
+  ggplot(aes(x = event_dt, y = n, color = author)) +
+  geom_line() +
+  facet_wrap(~ author, ncol = 1, scales= 'free') +
+  ggtitle("Number of Messages per Day") +
+  theme(legend.position = 'bottom') -> p
+
+ggplotly(p)
+  
+  
+```
+
+    
+```{r}
+data_e %>%
+  mutate(date = cut(event_dt, "week"),
+         date = as.Date(date)) %>%
+  group_by(date) %>%
+  summarise(count = n()) %>%
+  ggplot(aes(x = date, y = count, group = 1)) +
+  geom_line() +
+  stat_smooth(se = FALSE) +
+  scale_x_date(date_labels = "%b %y", date_breaks = '1 month')+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+  ggtitle("Number of Messages by Week") -> p
+
+ggplotly(p)
+
+```
+
+
+```{r}
+data_e %>% 
+  ungroup() %>%
+  select(author, event_dt, text) %>%
+  unique() %>%
+  mutate(event_dt = as.Date(event_dt)) %>%
+  group_by(event_dt, author) %>%
+  count() %>%
+  spread(author, n, fill = 0) %>%
+  mutate(n = Andrey/Anastasia) %>%
+  ggplot(aes(x = event_dt, y = n)) +
+  geom_line() +
+  ggtitle("Number of Andrey's messages per Anastasia's") +
+  theme(legend.position = 'bottom')
+```
+
+
+
+
+Emojis Summary
+
+ 
+```{r}
+data_e %>% 
+  unnest(emojis) %>%
+  na.omit() %>%
+  group_by(emojis, author) %>%
+  count() %>%
+  spread(author, n, fill = 0) %>%
+  ggplot(aes(x = Anastasia, y = Andrey, text = emojis)) +
+  geom_point() -> p
+
+ggplotly(p)
+  
+
+```
+
+
+
+
+Emoji Summary in numbers
+
+ 
+```{r}
+data_e %>% 
+  unnest(emojis) %>%
+  na.omit() %>%
+  group_by(emojis, author) %>%
+  count() %>%
+  spread(author, n, fill = 0) %>%
+  mutate(total = Anastasia + Andrey) %>%
+  arrange(desc(total))
+  
+
+```
+
+Emoji ratio by author
+
+```{r}
+data_e %>% 
+  unnest(emojis) %>%
+  na.omit() %>%
+  group_by(author) %>%
+  count() %>%
+  spread(author, n, fill = 0) %>%
+  mutate(total = Anastasia + Andrey) %>%
+  mutate(ratio = Andrey/Anastasia)
+  
+
+```
+  
+  
+  Examine seasonality in messaging patterns
+  
+```{r}
+data_e %>%
+  group_by(date, hour, weekday, author) %>%
+  summarise(count = n()) %>%
+  group_by(hour, weekday, author) %>%
+  summarise(count = mean(count)) %>%
+  ggplot(aes(x = hour, y = count, color = weekday)) +
+  geom_line() +
+  facet_wrap( ~ author) +
+  ggtitle("Messages by Author and Day of Week") -> p
+
+ggplotly(p)
+
+```
+
+```{r}
+data_e %>%
+  group_by(hour,  author) %>%
+  summarise(count = n()) %>%
+  group_by(author) %>%
+  mutate(pct = count/sum(count)) %>%
+  ggplot(aes(x = hour, y = pct, color = author)) +
+  geom_line() +
+  ggtitle("Messages by Author and Hour") -> p
+
+ggplotly(p)
+
+```
+
+```{r}
+data_e %>%
+  group_by(weekday,  author) %>%
+  summarise(count = n()) %>%
+  group_by(author) %>%
+  mutate(pct = count/sum(count)) %>%
+  ungroup() %>%
+  ggplot(aes(x = weekday, y = pct, color = author, group = author)) +
+  geom_line() +
+  ggtitle("Messages by Author and Day of Week") -> p
+
+ggplotly(p)
+
+```
+
+Next, we will analyze data within conversation sessions.
+
+First, we will discover how many converstions we had without interaptions longer than 60 and 180 mins. 
+
+```{r}
+
+data_e %>% 
+  summarise(count_60min = n_distinct(session_id60),
+            count_180min = n_distinct(session_id180))
+
+```
+
+
+
+Next, we look at the duration of conversations (limted to conversations not interrupted by 3 hours of inactivity). 
+
+
+```{r}
+data_e %>% 
+  group_by(session_id180) %>%
+  summarise(duration = difftime(max(event_dt), min(event_dt), units = 'mins')) -> agg
+
+
+summary(agg$duration %>% as.numeric())
+
+agg %>%
+  ggplot(aes(x = duration )) +
+  stat_density(geom = 'line') +
+  ggtitle("Duration of Conversations in Minutes") -> p
+
+ggplotly(p)
+  
+```
+
+We can also calculate a lag in response within sessions. 
+
+```{r}
+data_e %>%
+  arrange(id) %>%
+  group_by(session_id180) %>%
+  mutate(first_message_flag = case_when(event_dt == min(event_dt) ~ 1, TRUE ~ 0)) %>%
+  filter(author != lag(author, 1) & first_message_flag == 0) %>% 
+    mutate(message_lag = difftime(event_dt, lag(event_dt, 1), units = 'mins')) -> agg
+
+agg %>%
+  ggplot(aes(x = message_lag, color = author)) +
+  stat_density(geom = 'line') +
+  theme(legend.position =  'bottom')+
+  ggtitle("Density of Message Lag" ) -> p
+
+
+ggplotly(p)
+
+
+
+```
+
+```{r}
+data_e %>%
+  arrange(id) %>%
+  group_by(session_id180) %>%
+  mutate(first_message_flag = case_when(event_dt == min(event_dt) ~ 1, TRUE ~ 0)) %>%
+  filter(author != lag(author, 1) & first_message_flag == 0) %>% 
+  mutate(message_lag = difftime(event_dt, lag(event_dt, 1), units = 'mins')) -> agg
+
+agg %>%
+  ggplot(aes(x = message_lag, color = author)) +
+  stat_ecdf(geom = 'line') +
+  theme(legend.position =  'bottom')+
+  ggtitle("ECDF of Message Lag" ) -> p
+
+
+ggplotly(p)
+
+
+
+```
+
+Summary of message lag by author
+
+```{r}
+data_e %>%
+  arrange(id) %>%
+  group_by(session_id180) %>%
+  mutate(first_message_flag = case_when(event_dt == min(event_dt) ~ 1, TRUE ~ 0)) %>%
+  filter(author != lag(author, 1) & first_message_flag == 0)  %>%
+  mutate(message_lag = difftime(event_dt, lag(event_dt, 1), units = 'mins')) %>% 
+  na.omit() %>%
+  group_by(author) %>%
+  summarise(mean = mean(message_lag),
+            median = quantile(message_lag, .5),
+            percentile_25 = quantile(message_lag, .25),
+            percentile_75 = quantile(message_lag, .75),
+            percentile_95 = quantile(message_lag, .95)
+            )
+
+
+```
+  
+```{r}
+data_e %>%
+  arrange(id) %>%
+  group_by(session_id180) %>%
+  mutate(last_message_flag = case_when(event_dt == max(event_dt) ~ 1, TRUE ~ 0)) %>%
+  filter(author != lag(author, 1) & last_message_flag == 0) -> agg
+
+anastasia <- agg %>%
+  filter(author == 'Anastasia') %>%
+  .$message_lag  %>%
+  as.numeric()
+
+
+andrey <- agg %>%
+  filter(author == 'Andrey') %>%
+  .$message_lag %>%
+  as.numeric()
+
+
+ks.test(anastasia, andrey)
+```
+  
+```{r}
+wilcox.test(anastasia, andrey, paired = FALSE)
+
+
+
+```
+  
+  
+Find sessions with only messages by one author
+
+```{r}
+data_e %>%
+  group_by(session_id180) %>%
+  mutate(count = n_distinct(author)) %>%
+  filter(count == 1) %>%
+  group_by(author) %>%
+  count()
+  
+```
+  
+
+  
+  
+  
+  
