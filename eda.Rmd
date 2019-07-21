@@ -39,7 +39,7 @@ source("parse_chat.R")
 
 
 ```{r}
-ProcessChatData("WhatsApp Chat with AS.txt", "emojis.csv", "chat_data_parsed.Rdata")
+ProcessChatData("Discussion WhatsApp avec JB.txt", "emojis.csv", "chat_data_parsed.Rdata")
 ```
 
 
