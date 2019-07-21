@@ -31,25 +31,50 @@ library(stringr)
 library(plotly)
 ```
 
-
+Load the function to make data
 ```{r}
-#load the data
-load("data_e.Rdata")
+source("parse_chat.R")
+
 ```
 
 
-In this document we do some EDA on the chat history between Anastasia and Andrey. 
+```{r}
+ProcessChatData("WhatsApp Chat with AS.txt", "emojis.csv", "chat_data_parsed.Rdata")
+```
 
 
-First, we will count total lines of messages by author. Anastasia sent more messages compared to Andrey. 
 
 ```{r}
-data_e %>% 
+#load the data
+load("chat_data_parsed.Rdata")
+```
+
+
+
+```{r}
+str(chat_data_parsed)
+```
+
+
+```{r}
+authors <- chat_data_parsed %>% .$author %>% unique
+
+chat_data_parsed <- chat_data_parsed %>%
+  mutate(author = case_when(author != authors[1] ~ 'author_1', TRUE ~ 'author_2'))
+```
+
+
+
+
+In this document we do some EDA on the chat history.  First, we will count total lines of messages by author. 
+
+```{r}
+chat_data_parsed %>% 
   group_by(author) %>%
   count() %>%
   spread(author, n, fill = 0) %>%
-  mutate(total = Anastasia + Andrey) %>%
-    mutate(ratio = Andrey/Anastasia)
+  mutate(total = author_1 + author_2) %>%
+    mutate(ratio = author_1/ author_2)
 ```
 
 
@@ -63,7 +88,7 @@ Next, we will look at the total words sent by the author. Here we want to clean 
 
 
 ```{r}
-data_e %>% 
+chat_data_parsed %>% 
   select(author, text) %>%
   mutate(text = str_remove_all(text, "<Media omitted>")) %>%
   mutate(text = str_remove_all(text, "(^|\\s)http[^ ]*")) %>%
@@ -75,17 +100,17 @@ data_e %>%
   group_by(author) %>%
   summarise(words = sum(words))%>%
   spread(author, words, fill = 0) %>%
-  mutate(total = Anastasia + Andrey) %>%
-    mutate(ratio = Andrey/Anastasia)
+  mutate(total = author_1 + author_2) %>%
+    mutate(ratio = author_1/ author_2)
 ```
 
 
 
-Do one of the authors more likely to use big words? Checking the averge number of characters per word. Looks like there is no difference in the 
+Does one of the authors more likely to use big words? Checking the averge number of characters per word. 
 
 
 ```{r}
-data_e %>% 
+chat_data_parsed %>% 
   select(author, text) %>%
   mutate(text = str_remove_all(text, "<Media omitted>")) %>%
   mutate(text = str_remove_all(text, "(^|\\s)http[^ ]*")) %>%
@@ -111,21 +136,21 @@ data_e %>%
 Total characters sent by author, the ratio of characters is similar to message ratio. 
 
 ```{r}
-data_e %>% 
+chat_data_parsed %>% 
   select(author, event_dt, text) %>%
   unique() %>%
   mutate(characters = nchar(text))%>%
   group_by(author) %>%
   summarise(characters = sum(characters))%>%
   spread(author, characters, fill = 0) %>%
-  mutate(total = Anastasia + Andrey) %>%
-    mutate(ratio = Andrey/Anastasia)
+  mutate(total = author_1 + author_2) %>%
+    mutate(ratio = author_1/author_2)
 ```
 
-Next, we check vocabulary size. 
+Next, we check vocabulary size after removing media messages and links.
 
 ```{r}
-data_e %>% 
+chat_data_parsed %>% 
   select(author, text) %>%
   mutate(text = str_remove_all(text, "<Media omitted>")) %>%
   mutate(text = str_remove_all(text, "(^|\\s)http[^ ]*")) %>%
@@ -140,14 +165,14 @@ data_e %>%
   group_by(author) %>%
   count() %>%
   spread(author, n) %>%
-  mutate(diff = Anastasia - Andrey,
-         pct_diff = round(diff/Andrey*100,2))
+  mutate(diff = author_1 - author_2,
+         pct_diff = round(diff/author_2*100,2))
   
 ```
 
 
 ```{r}
-data_e %>% 
+chat_data_parsed  %>% 
   ungroup() %>%
   select(author, event_dt, text) %>%
   unique() %>%
@@ -167,7 +192,7 @@ ggplotly(p)
 
     
 ```{r}
-data_e %>%
+chat_data_parsed  %>%
   mutate(date = cut(event_dt, "week"),
          date = as.Date(date)) %>%
   group_by(date) %>%
@@ -177,7 +202,7 @@ data_e %>%
   stat_smooth(se = FALSE) +
   scale_x_date(date_labels = "%b %y", date_breaks = '1 month')+
   theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
-  ggtitle("Number of Messages by Week") -> p
+  ggtitle("Number of Messages per Week") -> p
 
 ggplotly(p)
 
@@ -185,7 +210,7 @@ ggplotly(p)
 
 
 ```{r}
-data_e %>% 
+chat_data_parsed  %>% 
   ungroup() %>%
   select(author, event_dt, text) %>%
   unique() %>%
@@ -193,10 +218,10 @@ data_e %>%
   group_by(event_dt, author) %>%
   count() %>%
   spread(author, n, fill = 0) %>%
-  mutate(n = Andrey/Anastasia) %>%
+  mutate(n = author_1/author_2) %>%
   ggplot(aes(x = event_dt, y = n)) +
   geom_line() +
-  ggtitle("Number of Andrey's messages per Anastasia's") +
+  ggtitle("Ratio of Messages from Author_1 to Author_2") +
   theme(legend.position = 'bottom')
 ```
 
@@ -207,13 +232,13 @@ Emojis Summary
 
  
 ```{r}
-data_e %>% 
+chat_data_parsed  %>% 
   unnest(emojis) %>%
   na.omit() %>%
   group_by(emojis, author) %>%
   count() %>%
   spread(author, n, fill = 0) %>%
-  ggplot(aes(x = Anastasia, y = Andrey, text = emojis)) +
+  ggplot(aes(x = author_1, y = author_2, text = emojis)) +
   geom_point() -> p
 
 ggplotly(p)
@@ -228,13 +253,13 @@ Emoji Summary in numbers
 
  
 ```{r}
-data_e %>% 
+chat_data_parsed %>% 
   unnest(emojis) %>%
   na.omit() %>%
   group_by(emojis, author) %>%
   count() %>%
   spread(author, n, fill = 0) %>%
-  mutate(total = Anastasia + Andrey) %>%
+  mutate(total = author_1 + author_2) %>%
   arrange(desc(total))
   
 
@@ -243,23 +268,23 @@ data_e %>%
 Emoji ratio by author
 
 ```{r}
-data_e %>% 
+chat_data_parsed  %>% 
   unnest(emojis) %>%
   na.omit() %>%
   group_by(author) %>%
   count() %>%
   spread(author, n, fill = 0) %>%
-  mutate(total = Anastasia + Andrey) %>%
-  mutate(ratio = Andrey/Anastasia)
+  mutate(total = author_1 + author_2) %>%
+  mutate(ratio = author_1/author_2)
   
 
 ```
   
   
-  Examine seasonality in messaging patterns
+Examine seasonality in messaging patterns
   
 ```{r}
-data_e %>%
+chat_data_parsed %>%
   group_by(date, hour, weekday, author) %>%
   summarise(count = n()) %>%
   group_by(hour, weekday, author) %>%
@@ -274,7 +299,7 @@ ggplotly(p)
 ```
 
 ```{r}
-data_e %>%
+chat_data_parsed  %>%
   group_by(hour,  author) %>%
   summarise(count = n()) %>%
   group_by(author) %>%
@@ -288,7 +313,7 @@ ggplotly(p)
 ```
 
 ```{r}
-data_e %>%
+chat_data_parsed %>%
   group_by(weekday,  author) %>%
   summarise(count = n()) %>%
   group_by(author) %>%
@@ -308,7 +333,7 @@ First, we will discover how many converstions we had without interaptions longer
 
 ```{r}
 
-data_e %>% 
+chat_data_parsed  %>% 
   summarise(count_60min = n_distinct(session_id60),
             count_180min = n_distinct(session_id180))
 
@@ -320,7 +345,7 @@ Next, we look at the duration of conversations (limted to conversations not inte
 
 
 ```{r}
-data_e %>% 
+chat_data_parsed  %>% 
   group_by(session_id180) %>%
   summarise(duration = difftime(max(event_dt), min(event_dt), units = 'mins')) -> agg
 
@@ -339,7 +364,7 @@ ggplotly(p)
 We can also calculate a lag in response within sessions. 
 
 ```{r}
-data_e %>%
+chat_data_parsed %>%
   arrange(id) %>%
   group_by(session_id180) %>%
   mutate(first_message_flag = case_when(event_dt == min(event_dt) ~ 1, TRUE ~ 0)) %>%
@@ -360,7 +385,7 @@ ggplotly(p)
 ```
 
 ```{r}
-data_e %>%
+chat_data_parsed  %>%
   arrange(id) %>%
   group_by(session_id180) %>%
   mutate(first_message_flag = case_when(event_dt == min(event_dt) ~ 1, TRUE ~ 0)) %>%
@@ -383,7 +408,7 @@ ggplotly(p)
 Summary of message lag by author
 
 ```{r}
-data_e %>%
+chat_data_parsed  %>%
   arrange(id) %>%
   group_by(session_id180) %>%
   mutate(first_message_flag = case_when(event_dt == min(event_dt) ~ 1, TRUE ~ 0)) %>%
@@ -402,29 +427,29 @@ data_e %>%
 ```
   
 ```{r}
-data_e %>%
+chat_data_parsed  %>%
   arrange(id) %>%
   group_by(session_id180) %>%
   mutate(last_message_flag = case_when(event_dt == max(event_dt) ~ 1, TRUE ~ 0)) %>%
   filter(author != lag(author, 1) & last_message_flag == 0) -> agg
 
-anastasia <- agg %>%
-  filter(author == 'Anastasia') %>%
+author_1 <- agg %>%
+  filter(author == 'author_1') %>%
   .$message_lag  %>%
   as.numeric()
 
 
-andrey <- agg %>%
-  filter(author == 'Andrey') %>%
+author_2 <- agg %>%
+  filter(author == 'author_2') %>%
   .$message_lag %>%
   as.numeric()
 
 
-ks.test(anastasia, andrey)
+ks.test(author_1, author_2)
 ```
   
 ```{r}
-wilcox.test(anastasia, andrey, paired = FALSE)
+wilcox.test(author_1, author_2, paired = FALSE)
 
 
 
@@ -434,7 +459,7 @@ wilcox.test(anastasia, andrey, paired = FALSE)
 Find sessions with only messages by one author
 
 ```{r}
-data_e %>%
+chat_data_parsed %>%
   group_by(session_id180) %>%
   mutate(count = n_distinct(author)) %>%
   filter(count == 1) %>%

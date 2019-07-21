@@ -86,8 +86,7 @@ ProcessChatData <- function(chat_data_location, emoji_csv_location, output_file_
            weekday = wday(date, label = TRUE)) %>%
     SessionizeUDF(., 60) %>%
     SessionizeUDF(., 60*3) %>%
-    mutate(message_lag = difftime(event_dt, lag(event_dt, 1), units = 'mins')) %>%
-    select(-id)
+    mutate(message_lag = difftime(event_dt, lag(event_dt, 1), units = 'mins'))  
   
   
   save(chat_data_parsed, file = output_file_name)

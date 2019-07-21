@@ -2,6 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
-.csv
-.txt
-.html
+*.csv
+*.html
+*.txt
+emojis.csv
+*.Rdata
