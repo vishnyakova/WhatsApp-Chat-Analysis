@@ -8,3 +8,4 @@
 emojis.csv
 *.Rdata
 *.png
+.ipynb_checkpoints/process_chat_data-checkpoint.ipynb
